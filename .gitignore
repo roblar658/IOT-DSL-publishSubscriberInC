@@ -1,0 +1,12 @@
+# Build artifacts and objects
+*.o
+*.obj
+*.log
+logs/*.log
+!logs/.gitkeep
+
+# Windows / OS files
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/

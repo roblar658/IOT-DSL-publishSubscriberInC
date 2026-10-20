@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  sub_lampe:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sub_lampe
+    command: ["listen", "9001", "--tag", "LAMPE", "--log", "/app/logs/node_LAMPE.log"]
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - pubsub_net
+    restart: unless-stopped
+
+  sub_varme:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sub_varme
+    command: ["listen", "9002", "--tag", "VARME", "--log", "/app/logs/node_VARME.log"]
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - pubsub_net
+    restart: unless-stopped
+
+  pub_stue:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: pub_stue
+    command: ["listen", "8001", "--tag", "STUE", "--log", "/app/logs/node_STUE.log"]
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - pubsub_net
+    restart: unless-stopped
+
+  controller:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: dsl_controller
+    command: ["run", "scripts/docker_scenario.dsl", "--log", "/app/logs/controller.log"]
+    depends_on:
+      - sub_lampe
+      - sub_varme
+      - pub_stue
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - pubsub_net
+
+networks:
+  pubsub_net:
+    driver: bridge
