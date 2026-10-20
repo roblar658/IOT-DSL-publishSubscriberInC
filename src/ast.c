@@ -97,3 +97,20 @@ void ast_stmt_free(AstStmt *stmt) {
     }
     free(stmt);
 }
+
+const char *ast_stmt_type_name(AstStmtType type) {
+    switch (type) {
+        case STMT_TAGS_BLOCK:       return "TAGS_BLOCK";
+        case STMT_CHANGE:           return "CHANGE";
+        case STMT_DELETE:           return "DELETE";
+        case STMT_ADD:              return "ADD";
+        case STMT_SUBSCRIBE:        return "SUBSCRIBE";
+        case STMT_BROADCAST:        return "BROADCAST";
+        case STMT_MULTICAST:        return "MULTICAST";
+        case STMT_SEND:             return "SEND";
+        case STMT_SUBSCRIBER_BLOCK: return "SUBSCRIBER_BLOCK";
+        case STMT_SLEEP:            return "SLEEP";
+        case STMT_LOG:              return "LOG";
+        default:                    return "UNKNOWN";
+    }
+}

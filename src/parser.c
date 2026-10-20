@@ -77,7 +77,7 @@ static bool parse_endpoint(Parser *parser, Endpoint *out_ep) {
 
         if (match(parser, TOKEN_COLON) || match(parser, TOKEN_COLONCOLON)) {
             if (check(parser, TOKEN_NUMBER) || check(parser, TOKEN_IDENTIFIER)) {
-                char combined[256];
+                char combined[512];
                 snprintf(combined, sizeof(combined), "%s:%s", host_buf, parser->current.text);
                 parser_advance(parser);
                 return net_parse_endpoint(combined, out_ep);

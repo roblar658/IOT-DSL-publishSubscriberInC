@@ -18,6 +18,9 @@ void logger_close(void);
 void logger_set_console_level(LogLevel level);
 void logger_set_file_level(LogLevel level);
 
+typedef void (*LoggerHookFn)(LogLevel level, const char *component, const char *message, const char *timestamp, void *userdata);
+void logger_set_hook(LoggerHookFn hook, void *userdata);
+
 void logger_log(LogLevel level, const char *component, const char *fmt, ...);
 
 #define LOG_DEBUG(comp, ...)   logger_log(LOG_LEVEL_DEBUG, comp, __VA_ARGS__)

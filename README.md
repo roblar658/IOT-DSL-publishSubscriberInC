@@ -169,9 +169,49 @@ make
 ### 3. Kjøre et DSL-skript
 ```bash
 ./pubsub_dsl run scripts/demo.dsl
+
+# Kjøre komplekst EN 54 brannalarm-scenario:
+./pubsub_dsl run scripts/fire_alarm_complex.dsl
 ```
 
 ### 4. Starte en Node-lytter manuelt
 ```bash
 ./pubsub_dsl listen 9001 --tag LAMPE
 ```
+
+---
+
+## 🔥 3D Three.js Visualisering med Ren C Backend (EN 54 / NFPA 72)
+
+Prosjektet inkluderer en fullverdig, interaktiv **Three.js 3D-visning og SCADA-kontrollpanel** drevet av den **native C-backend-serveren** (`pubsub_dsl.exe web 3000`):
+
+### Arkitektur & Egenskaper:
+1. **Ren C Backend & DSL-motor (`src/web_server.c`, `src/runtime.c`)**:
+   - All DSL-parsing (Lexer/AST/Parser) og eksekvering (Runtime, UDP-pakkeutsending, rutingstabellmutasjoner) skjer **utelukkende i C**.
+   - C-webserveren strømmer hendelser, pakker, logger og steg direkte til nettleseren via **Server-Sent Events (SSE)** over `/api/events`.
+   - Det finnes **ingen DSL-motor i JavaScript**; nettleseren fungerer som en ren 3D SCADA-klient og sender brukerkommandoer tilbake til C via REST API-et (`/api/run`, `/api/trigger`, `/api/routing`, `/api/reset`).
+2. **Fysisk 3D-modell av industribygg (`web/js/building_3d.js`)**:
+   - **Kjeller (Sone 0)**: Glasskledd serverrom, serverrack med blinkende status-LED-er, Inergen (N2/Ar/CO2) inertgass-slukkesystem, VESDA aspirasjonsdetektor og teknisk rom.
+   - **1. Etasje (Sone 1)**: Hovedinngang, resepsjon, kontorfløy, optiske røykdetektorer, manuelle meldere (break-glass), optiske xenon-blitzlamper og **motoriserte branndører som fysisk lukkes**.
+   - **2. Etasje (Sone 2)**: Storkjøkken med kokeøy, avtrekkshette, differensial-varmemelder, gassdetektor og **aktive vanntåke/sprinklerdyser som spyler vannpartikler**.
+   - **Tak & HVAC (Sone 3)**: Motoriserte røykluker (`ROYKAVTREKK_TAK`) med roterende vifteblader, nødavstenging av ventilasjon (`HVAC_VENTILASJON_STOPP`) og heissjakt med nødretur til 1. etasje.
+3. **Visuelle partikkeleffekter og animasjoner**:
+   - Reell røyk- og flammesimulering i berørte rom utløst av hendelser fra C-runtime.
+   - Lysende nettverkspakker / foton-pulser som sendes langs 3D-kabelgatene ved `send()`, `multicast()` og `broadcast()`.
+   - Eksplodert visning (0–100% etasjeseparasjon) og X-Ray gjennomsiktighetsmodus.
+4. **Web Audio Synthesizer (`web/js/audio.js`)**:
+   - Syntetiserer EN 54 Slow Whoop brannsirener (500–1200 Hz), gassutblåsingshves, vanndusj, dørklunk og talevarsling uten eksterne lydfiler.
+5. **Kameravisninger og etasjefiltre**:
+   - Forhåndsdefinerte kameravinkler for Serverrom, Storkjøkken, Sentral og Røykluker.
+
+### Starte 3D-løsningen og C-webserveren:
+
+```powershell
+# Alternativ 1: Kjøre PowerShell-oppstartsskriptet (bygger om nødvendig og starter C-serveren)
+.\run_fire_alarm_web.ps1
+
+# Alternativ 2: Starte C Webserver direkte via kommandolinjen
+.\pubsub_dsl.exe web 3000
+# Åpne deretter http://localhost:3000 i nettleseren
+```
+

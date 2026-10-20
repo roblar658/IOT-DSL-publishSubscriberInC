@@ -60,6 +60,9 @@ bool runtime_set_tag(Runtime *rt, RegistryType reg, const char *name, const Endp
         net_format_endpoint(&existing->endpoint, ep_str, sizeof(ep_str));
         LOG_ROUTING("ROUTING", "Updated %s tag '%s' -> %s",
                     registry_type_name(reg), name, ep_str);
+        if (rt->routing_hook) {
+            rt->routing_hook("UPDATE", registry_type_name(reg), name, ep_str, rt->hook_userdata);
+        }
         return true;
     }
 
@@ -86,6 +89,9 @@ bool runtime_set_tag(Runtime *rt, RegistryType reg, const char *name, const Endp
             net_format_endpoint(&entry->endpoint, ep_str, sizeof(ep_str));
             LOG_ROUTING("ROUTING", "Registered %s tag '%s' -> %s",
                         registry_type_name(reg), name, ep_str);
+            if (rt->routing_hook) {
+                rt->routing_hook("REGISTER", registry_type_name(reg), name, ep_str, rt->hook_userdata);
+            }
             return true;
         }
     }
@@ -107,6 +113,9 @@ bool runtime_delete_tag(Runtime *rt, RegistryType reg, const char *name) {
     entry->in_use = false;
     get_registry(rt, reg)->count--;
     LOG_ROUTING("ROUTING", "Deleted %s tag '%s'", registry_type_name(reg), name);
+    if (rt->routing_hook) {
+        rt->routing_hook("DELETE", registry_type_name(reg), name, "EMPTY", rt->hook_userdata);
+    }
     return true;
 }
 
@@ -153,6 +162,15 @@ static bool send_tag_message(Runtime *rt, const char *type, const TagEntry *pub,
              rt->message_sequence, type, pub->name, sub->name, escaped_payload);
 
     LOG_INFO("NET_TX", "Dispatching %s from [%s] to [%s]", type, pub->name, sub->name);
+
+    char from_str[64], to_str[64];
+    net_format_endpoint(&pub->endpoint, from_str, sizeof(from_str));
+    net_format_endpoint(&sub->endpoint, to_str, sizeof(to_str));
+
+    if (rt->packet_hook) {
+        rt->packet_hook(rt->message_sequence, type, pub->name, sub->name,
+                        from_str, to_str, payload_text, strlen(json_packet), rt->hook_userdata);
+    }
 
     return net_send_udp(&pub->endpoint, &sub->endpoint, json_packet, strlen(json_packet));
 }
@@ -337,15 +355,102 @@ bool runtime_execute_statement(Runtime *rt, const AstStmt *stmt) {
 bool runtime_execute_program(Runtime *rt, const Program *prog) {
     if (!rt || !prog) return false;
 
+    rt->abort_execution = false;
+    rt->is_paused = false;
+
     LOG_INFO("EXEC", "Starting program execution (%zu statements)...", prog->count);
 
     for (size_t i = 0; i < prog->count; i++) {
+        if (rt->abort_execution) {
+            LOG_WARN("EXEC", "Program execution aborted by user");
+            break;
+        }
+
+        while (rt->is_paused && !rt->abort_execution) {
+            sleep_ms(50);
+        }
+
+        if (rt->step_hook) {
+            rt->step_hook(i, prog->count, prog->statements[i]->line,
+                          ast_stmt_type_name(prog->statements[i]->type), rt->hook_userdata);
+        }
+
         runtime_execute_statement(rt, prog->statements[i]);
+
+        if (rt->step_delay_ms > 0) {
+            sleep_ms(rt->step_delay_ms);
+        }
     }
 
     LOG_INFO("EXEC", "Program execution finished. Final routing state below:");
     runtime_dump_state(rt);
     return true;
+}
+
+bool runtime_send_direct(Runtime *rt, const char *from_tag, const char *to_tag, const char *payload) {
+    if (!rt || !from_tag || !to_tag) return false;
+    TagEntry *pub = runtime_find_tag(rt, REGISTRY_PUBLISHER, from_tag);
+    if (!pub) {
+        Endpoint ep;
+        net_parse_endpoint("10.0.1.10:8100", &ep);
+        runtime_set_tag(rt, REGISTRY_PUBLISHER, from_tag, &ep, false);
+        pub = runtime_find_tag(rt, REGISTRY_PUBLISHER, from_tag);
+    }
+    TagEntry *sub = runtime_find_tag(rt, REGISTRY_SUBSCRIBER, to_tag);
+    if (!sub) {
+        Endpoint ep;
+        net_parse_endpoint("10.0.99.1:9199", &ep);
+        runtime_set_tag(rt, REGISTRY_SUBSCRIBER, to_tag, &ep, false);
+        sub = runtime_find_tag(rt, REGISTRY_SUBSCRIBER, to_tag);
+    }
+    LOG_INFO("EXEC", "Direct send from publisher [%s] to subscriber [%s]", from_tag, to_tag);
+    return send_tag_message(rt, "SEND", pub, sub, payload);
+}
+
+void runtime_to_json(const Runtime *rt, char *out_json, size_t max_len) {
+    if (!rt || !out_json || max_len == 0) return;
+    size_t o = 0;
+    o += snprintf(out_json + o, max_len - o, "{\"publishers\":[");
+
+    bool first = true;
+    for (size_t i = 0; i < MAX_TAGS; i++) {
+        if (rt->publisher_tags.entries[i].in_use) {
+            const TagEntry *e = &rt->publisher_tags.entries[i];
+            char ep_str[64];
+            net_format_endpoint(&e->endpoint, ep_str, sizeof(ep_str));
+            o += snprintf(out_json + o, max_len - o, "%s{\"tag\":\"%s\",\"endpoint\":\"%s\",\"empty\":%s}",
+                          first ? "" : ",", e->name, ep_str, e->is_empty ? "true" : "false");
+            first = false;
+        }
+    }
+
+    o += snprintf(out_json + o, max_len - o, "],\"subscribers\":[");
+    first = true;
+    for (size_t i = 0; i < MAX_TAGS; i++) {
+        if (rt->subscriber_tags.entries[i].in_use) {
+            const TagEntry *e = &rt->subscriber_tags.entries[i];
+            char ep_str[64];
+            net_format_endpoint(&e->endpoint, ep_str, sizeof(ep_str));
+            o += snprintf(out_json + o, max_len - o, "%s{\"tag\":\"%s\",\"endpoint\":\"%s\",\"empty\":%s}",
+                          first ? "" : ",", e->name, ep_str, e->is_empty ? "true" : "false");
+            first = false;
+        }
+    }
+
+    o += snprintf(out_json + o, max_len - o, "],\"routes\":[");
+    first = true;
+    for (size_t i = 0; i < rt->route_count; i++) {
+        const RouteEntry *r = &rt->routes[i];
+        if (r->in_use) {
+            char from_str[64], to_str[64];
+            net_format_endpoint(&r->from_ep, from_str, sizeof(from_str));
+            net_format_endpoint(&r->to_ep, to_str, sizeof(to_str));
+            o += snprintf(out_json + o, max_len - o, "%s{\"subscriber\":\"%s\",\"from\":\"%s\",\"to\":\"%s\"}",
+                          first ? "" : ",", r->sub_tag, from_str, to_str);
+            first = false;
+        }
+    }
+    snprintf(out_json + o, max_len - o, "]}");
 }
 
 void runtime_dump_state(const Runtime *rt) {

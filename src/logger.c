@@ -4,6 +4,18 @@
 static FILE *s_log_file = NULL;
 static LogLevel s_console_level = LOG_LEVEL_DEBUG;
 static LogLevel s_file_level = LOG_LEVEL_DEBUG;
+static LoggerHookFn s_hook = NULL;
+static void *s_hook_userdata = NULL;
+
+static void lock_logger(void);
+static void unlock_logger(void);
+
+void logger_set_hook(LoggerHookFn hook, void *userdata) {
+    lock_logger();
+    s_hook = hook;
+    s_hook_userdata = userdata;
+    unlock_logger();
+}
 
 #if defined(PLATFORM_WINDOWS)
 static CRITICAL_SECTION s_log_lock;
@@ -141,7 +153,7 @@ void logger_log(LogLevel level, const char *component, const char *fmt, ...) {
         return;
     }
 
-    char timebuf[64];
+    char timebuf[96];
     get_formatted_time(timebuf, sizeof(timebuf));
 
     char msgbuf[4096];
@@ -170,6 +182,10 @@ void logger_log(LogLevel level, const char *component, const char *fmt, ...) {
         fprintf(s_log_file, "[%s] [%-7s] [%s] %s\n",
                 timebuf, lvl_str, comp, msgbuf);
         fflush(s_log_file);
+    }
+
+    if (s_hook) {
+        s_hook(level, comp, msgbuf, timebuf, s_hook_userdata);
     }
 
     unlock_logger();

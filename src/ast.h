@@ -127,5 +127,6 @@ void program_free(Program *prog);
 
 AstStmt *ast_stmt_create(AstStmtType type, int line);
 void ast_stmt_free(AstStmt *stmt);
+const char *ast_stmt_type_name(AstStmtType type);
 
 #endif // AST_H

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PubSub DSL - 3D Brannalarmsystem (EN 54 / NFPA 72)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- TOP HEADER -->
+    <header class="app-header">
+        <div class="brand-section">
+            <i class="fas fa-fire brand-icon"></i>
+            <div class="brand-title">
+                PUBSUB DSL <span class="brand-badge">EN 54 BRANNSIKRING</span>
+            </div>
+        </div>
+
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-label">Nettverkspakker</span>
+                <span class="stat-value" id="stat-packet-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Trafikk (UDP)</span>
+                <span class="stat-value" id="stat-bytes-count">0.0 KB</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Aktive Noder</span>
+                <span class="stat-value" id="device-count-badge">25 enheter</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button id="btn-mute" class="btn btn-outline" title="Slå av/på synthesizer-lyd">
+                <i class="fas fa-volume-up"></i> Lyd: PÅ
+            </button>
+        </div>
+    </header>
+
+    <!-- ALARM STATUS BANNER -->
+    <div id="alarm-status-banner" class="status-banner banner-normal">
+        <div>
+            <strong id="alarm-title">✅ BYGG OVERVÅKET - NORMAL DRIFT</strong> &mdash; 
+            <span id="alarm-desc">Alle 4 soner, 12 sensorer og 13 aktuatorer operative over PubSub DSL-nettverket.</span>
+        </div>
+    </div>
+
+    <!-- MAIN APP: SIDEBAR HUD + 3D VIEWPORT -->
+    <main class="app-main">
+
+        <!-- LEFT SIDEBAR HUD -->
+        <aside class="sidebar-hud">
+            <!-- Navigation Tabs -->
+            <div class="tab-header">
+                <button class="tab-btn active" data-tab="tab-editor">
+                    <i class="fas fa-code"></i> DSL Editor
+                </button>
+                <button class="tab-btn" data-tab="tab-devices">
+                    <i class="fas fa-microchip"></i> Enheter
+                </button>
+                <button class="tab-btn" data-tab="tab-routing">
+                    <i class="fas fa-project-diagram"></i> Ruting
+                </button>
+                <button class="tab-btn" data-tab="tab-console">
+                    <i class="fas fa-terminal"></i> Logg
+                </button>
+            </div>
+
+            <!-- Tab Content Panes -->
+            <div class="tab-content">
+
+                <!-- 1. DSL CODE EDITOR PANE -->
+                <div id="tab-editor" class="tab-pane active">
+                    <div class="scenario-selector-box">
+                        <label class="field-label" for="scenario-select">Forhåndsdefinert Brannscenario:</label>
+                        <select id="scenario-select" class="styled-select"></select>
+                        <p id="scenario-desc" class="scenario-desc-text"></p>
+                    </div>
+
+                    <div class="editor-container">
+                        <div id="editor-line-numbers" class="editor-line-numbers">1</div>
+                        <textarea id="dsl-editor" class="dsl-textarea" spellcheck="false"></textarea>
+                    </div>
+
+                    <div class="playback-toolbar">
+                        <div class="button-row">
+                            <button id="btn-run" class="btn btn-primary" style="flex: 2;">
+                                <i class="fas fa-play"></i> Kjør DSL
+                            </button>
+                            <button id="btn-pause" class="btn btn-secondary" disabled style="flex: 1;">
+                                <i class="fas fa-pause"></i> Pause
+                            </button>
+                            <button id="btn-stop" class="btn btn-danger" disabled style="flex: 1;">
+                                <i class="fas fa-stop"></i> Stopp
+                            </button>
+                            <button id="btn-reset" class="btn btn-outline" style="flex: 1;">
+                                <i class="fas fa-rotate-left"></i> Nullstill
+                            </button>
+                        </div>
+
+                        <div class="speed-control-box">
+                            <span>Hastighet:</span>
+                            <input type="range" id="speed-slider" class="range-slider" min="0.25" max="4.0" step="0.25" value="1.0">
+                            <span id="speed-label" style="font-family: var(--font-mono); width: 35px; text-align: right;">1.0x</span>
+                        </div>
+
+                        <div class="progress-track">
+                            <div id="execution-progress-bar" class="progress-fill"></div>
+                        </div>
+                        <div id="current-step-text" class="step-indicator">Klar til kjøring</div>
+                    </div>
+                </div>
+
+                <!-- 2. DEVICES & SENSORS PANE -->
+                <div id="tab-devices" class="tab-pane">
+                    <div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span class="field-label">3D Brannkomponenter (Klikk enhet for inspeksjon)</span>
+                    </div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Tag Navn</th>
+                                    <th>Type</th>
+                                    <th>Sone</th>
+                                    <th>Endepunkt</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="device-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. ROUTING TABLE PANE -->
+                <div id="tab-routing" class="tab-pane">
+                    <div style="margin-bottom: 0.5rem;">
+                        <span class="field-label">PubSub DSL Rutingstabell (Dynamisk Oppdatert)</span>
+                    </div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Reg</th>
+                                    <th>Tag</th>
+                                    <th>Endepunkt (IP:Port)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routing-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. CONSOLE / TERMINAL LOG PANE -->
+                <div id="tab-console" class="tab-pane">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" id="autoscroll-toggle" checked> Auto-scroll
+                        </label>
+                        <button id="btn-clear-console" class="btn btn-outline" style="padding: 2px 8px; font-size: 0.7rem;">
+                            Tøm logg
+                        </button>
+                    </div>
+                    <div id="console-output" class="console-box"></div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- 3D VIEWPORT CANVAS -->
+        <section class="viewport-section">
+            <div id="viewport-3d"></div>
+
+            <!-- Dynamic Red Alarm Screen Vignette -->
+            <div id="alarm-vignette" class="alarm-vignette"></div>
+
+            <!-- 3D Live Event Notification Feed -->
+            <div id="live-event-feed" class="live-event-feed"></div>
+
+            <!-- Top-Right 3D Overlays (Navigation, Floors & Cameras) -->
+            <div class="overlay-top-right">
+                <!-- Navigation Mode Selector (Orbit vs Walk) -->
+                <div class="overlay-panel">
+                    <span class="field-label">Navigasjon & Bevegelse:</span>
+                    <div class="pills-group">
+                        <button id="btn-mode-orbit" class="btn-pill btn-mode active" data-mode="ORBIT" title="3D Orbit: Dra med venstre musetast, pan med høyre, rull for zoom">
+                            <i class="fas fa-arrows-spin"></i> 3D Orbit
+                        </button>
+                        <button id="btn-mode-walk" class="btn-pill btn-mode" data-mode="WALK" title="Gå-modus: Bruk W/A/S/D og mus for å bevege deg fritt rundt i bygget">
+                            <i class="fas fa-person-walking"></i> Gå-Modus (WASD)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Floor Selector -->
+                <div class="overlay-panel">
+                    <span class="field-label">Etasjevelger (Filter):</span>
+                    <div class="pills-group">
+                        <button class="btn-pill btn-floor active" data-floor="ALL">Alle Etasjer</button>
+                        <button class="btn-pill btn-floor" data-floor="BASEMENT">Kjeller (Sone 0)</button>
+                        <button class="btn-pill btn-floor" data-floor="FLOOR1">1. Etasje (Sone 1)</button>
+                        <button class="btn-pill btn-floor" data-floor="FLOOR2">2. Etasje (Sone 2)</button>
+                        <button class="btn-pill btn-floor" data-floor="ROOF">Tak & HVAC (Sone 3)</button>
+                    </div>
+                </div>
+
+                <!-- Camera Presets -->
+                <div class="overlay-panel">
+                    <span class="field-label">Kameravisning:</span>
+                    <div class="pills-group">
+                        <button class="btn-pill btn-cam active" data-cam="OVERVIEW">Oversikt</button>
+                        <button class="btn-pill btn-cam" data-cam="SERVER_ROOM">Serverrom</button>
+                        <button class="btn-pill btn-cam" data-cam="KITCHEN">Storkjøkken</button>
+                        <button class="btn-pill btn-cam" data-cam="CENTRAL_PANEL">Sentral</button>
+                        <button class="btn-pill btn-cam" data-cam="ROOF_VENT">Røykluker</button>
+                    </div>
+                </div>
+
+                <!-- Exploded & X-Ray View -->
+                <div class="overlay-panel" style="display: flex; gap: 1rem; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="field-label" style="margin: 0;">Eksplodert Visning:</span>
+                        <input type="range" id="exploded-slider" class="range-slider" min="0" max="1" step="0.05" value="0" style="width: 80px;">
+                        <span id="exploded-label" style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-accent); width: 32px;">0%</span>
+                    </div>
+
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer;">
+                        <input type="checkbox" id="xray-toggle"> X-Ray Modus
+                    </label>
+                </div>
+            </div>
+
+            <!-- Walk Mode Navigation HUD & On-screen Controls -->
+            <div id="walk-hud" class="walk-hud hidden">
+                <div class="walk-legend">
+                    <span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span> Gå rundt
+                    <span class="key-sep">|</span>
+                    <span class="key-badge">Q</span>/<span class="key-badge">E</span> Opp/Ned
+                    <span class="key-sep">|</span>
+                    <span class="key-badge">Shift</span> Løp
+                    <span class="key-sep">|</span>
+                    <span><i class="fas fa-computer-mouse"></i> Dra mus for å se</span>
+                </div>
+                <!-- On-Screen D-Pad for easy clicking / touchscreen -->
+                <div class="dpad-controls">
+                    <div class="dpad-grid">
+                        <button class="dpad-btn" id="dpad-up" title="Gå fremover (W)"><i class="fas fa-chevron-up"></i></button>
+                        <div class="dpad-row">
+                            <button class="dpad-btn" id="dpad-left" title="Gå venstre (A)"><i class="fas fa-chevron-left"></i></button>
+                            <button class="dpad-btn" id="dpad-down" title="Gå bakover (S)"><i class="fas fa-chevron-down"></i></button>
+                            <button class="dpad-btn" id="dpad-right" title="Gå høyre (D)"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="dpad-vertical">
+                        <button class="dpad-elev-btn" id="dpad-elev-up" title="Fly opp (E / Space)"><i class="fas fa-arrow-up"></i> Opp</button>
+                        <button class="dpad-elev-btn" id="dpad-elev-down" title="Fly ned (Q / C)"><i class="fas fa-arrow-down"></i> Ned</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Quick Trigger Deck -->
+            <div class="overlay-bottom-deck">
+                <button id="btn-quick-smoke" class="btn-deck btn-deck-alarm">
+                    <i class="fas fa-smog"></i> Røyk i Kontor
+                </button>
+                <button id="btn-quick-breakglass" class="btn-deck btn-deck-alarm">
+                    <i class="fas fa-hand-fist"></i> Manuell Melder E1
+                </button>
+                <button id="btn-quick-kitchen" class="btn-deck btn-deck-alarm">
+                    <i class="fas fa-fire-burner"></i> Kjøkkenbrann & Sprinkler
+                </button>
+                <button id="btn-quick-server" class="btn-deck btn-deck-alarm">
+                    <i class="fas fa-server"></i> VESDA & Gass-Slukking
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- DEVICE DETAIL MODAL -->
+    <div id="device-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modal-device-tag">TAG_NAME</h3>
+                    <small style="color: var(--text-muted);">Enhetsdetaljer i 3D-modell</small>
+                </div>
+                <button id="modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-details">
+                <div class="modal-row">
+                    <span>Enhetstype:</span>
+                    <span id="modal-device-type">-</span>
+                </div>
+                <div class="modal-row">
+                    <span>Brannsone:</span>
+                    <span id="modal-device-zone">-</span>
+                </div>
+                <div class="modal-row">
+                    <span>Nettverksadresse:</span>
+                    <span id="modal-device-ip">-</span>
+                </div>
+                <div class="modal-row">
+                    <span>Gjeldende Status:</span>
+                    <span id="modal-device-status">-</span>
+                </div>
+            </div>
+            <button id="modal-btn-trigger" class="btn btn-danger" style="width: 100%; margin-top: 0.5rem;">
+                <i class="fas fa-bolt"></i> Simuler Alarm på denne Enheten
+            </button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="lib/three.min.js"></script>
+    <script src="lib/OrbitControls.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/scenarios.js"></script>
+    <script src="js/building_3d.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

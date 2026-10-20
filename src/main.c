@@ -4,12 +4,14 @@
 #include "parser.h"
 #include "runtime.h"
 #include "node_listener.h"
+#include "web_server.h"
 
 static void print_usage(const char *prog_name) {
     printf("=================================================================\n");
     printf("  PubSub DSL Engine & Node Daemon in C\n");
     printf("=================================================================\n");
     printf("Usage:\n");
+    printf("  %s web [port] [web_root]              Start C Web Server & Three.js SCADA Host\n", prog_name);
     printf("  %s run <script.dsl> [options]         Execute a DSL script\n", prog_name);
     printf("  %s listen <port | host:port> [options] Start a subscriber/publisher node\n", prog_name);
     printf("  %s test                                Run built-in self tests\n", prog_name);
@@ -261,6 +263,28 @@ static int cmd_test(void) {
     return 0;
 }
 
+static int cmd_web(int argc, char **argv) {
+    int port = 3000;
+    const char *web_root = "web";
+
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
+            port = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--root") == 0 && i + 1 < argc) {
+            web_root = argv[++i];
+        } else if (argv[i][0] != '-') {
+            int p = atoi(argv[i]);
+            if (p > 0) {
+                port = p;
+            } else {
+                web_root = argv[i];
+            }
+        }
+    }
+
+    return web_server_start(port, web_root);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         print_usage(argv[0]);
@@ -271,6 +295,8 @@ int main(int argc, char **argv) {
 
     if (strcmp(cmd, "run") == 0) {
         return cmd_run(argc, argv);
+    } else if (strcmp(cmd, "web") == 0 || strcmp(cmd, "serve") == 0) {
+        return cmd_web(argc, argv);
     } else if (strcmp(cmd, "listen") == 0) {
         return cmd_listen(argc, argv);
     } else if (strcmp(cmd, "test") == 0) {

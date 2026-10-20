@@ -17,7 +17,7 @@ if not exist "pubsub_dsl.exe" (
         pause
         exit /b 1
     )
-    gcc -Wall -Wextra -O2 -Isrc -o pubsub_dsl.exe src\logger.c src\net.c src\lexer.c src\ast.c src\parser.c src\runtime.c src\node_listener.c src\main.c -lws2_32
+    gcc -Wall -Wextra -O2 -Isrc -o pubsub_dsl.exe src\logger.c src\net.c src\lexer.c src\ast.c src\parser.c src\runtime.c src\node_listener.c src\web_server.c src\main.c -lws2_32
     if %errorlevel% neq 0 (
         echo ERROR: Compilation failed.
         pause
