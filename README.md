@@ -2,6 +2,8 @@
 
 Dette prosjektet implementerer et fullstendig, skreddersydd programmeringsspråk (Domain-Specific Language - DSL) i C for pub/sub- og IoT-nettverksruting, sammen med et komplett testoppsett i **Docker** for å verifisere reell nettverkskommunikasjon og grundig loggføring.
 
+<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/9ba96826-afba-4965-b373-41556fdb5fb4" />
+
 ---
 
 ## 📋 Innhold og Arkitektur
@@ -34,6 +36,49 @@ pubsub_dsl_c/
 ├── run_docker_test.sh       # Automatisk testkjører i Bash/Linux
 └── README.md
 ```
+[2026-10-20 21:32:44.186] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching SEND from [SENTRAL_KONTROLL] to [BRANNVESEN_110]
+[2026-10-20 21:32:44.190] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 140 bytes: 10.0.99.1:8199 -> 10.0.99.110:9110 | Payload: '{"seq":6,"type":"SEND","from_tag":"SENTRAL_KONTROLL","to_tag":"BRANNVESEN_110","payload":"ALARM_110: Gass-slukkeanlegg utl├©st i Serverrom"}'
+[2026-10-20 21:32:44.606] ←[32mINFO   ←[0m ←[1;37m[EXEC]←[0m Sleeping for 500 ms...
+[2026-10-20 21:32:45.525] ←[32mINFO   ←[0m ←[1;37m[EXEC]←[0m Initiating broadcast from publisher [SENTRAL_KONTROLL] to all subscriber tags
+[2026-10-20 21:32:45.529] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [SENTRAL_KONTROLL]
+[2026-10-20 21:32:45.532] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 174 bytes: 10.0.99.1:8199 -> 10.0.99.1:9199 | Payload: '{"seq":7,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"SENTRAL_KONTROLL","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.536] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [SIRENE_SERVER]
+[2026-10-20 21:32:45.539] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 171 bytes: 10.0.99.1:8199 -> 10.0.0.50:9100 | Payload: '{"seq":8,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"SIRENE_SERVER","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.548] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [BLITZ_VARSLING]
+[2026-10-20 21:32:45.552] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 172 bytes: 10.0.99.1:8199 -> 10.0.1.51:9111 | Payload: '{"seq":9,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"BLITZ_VARSLING","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.554] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [INERGEN_GASS_SERVER]
+[2026-10-20 21:32:45.557] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 178 bytes: 10.0.99.1:8199 -> 10.0.0.70:9108 | Payload: '{"seq":10,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"INERGEN_GASS_SERVER","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.561] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [HVAC_VENTILASJON_STOPP]
+[2026-10-20 21:32:45.578] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 181 bytes: 10.0.99.1:8199 -> 10.0.3.60:9135 | Payload: '{"seq":11,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"HVAC_VENTILASJON_STOPP","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.582] ←[32mINFO   ←[0m ←[1;37m[NET_TX]←[0m Dispatching BROADCAST from [SENTRAL_KONTROLL] to [BRANNVESEN_110]
+[2026-10-20 21:32:45.585] ←[34mNETWORK←[0m ←[1;37m[NET_TX]←[0m Sent 173 bytes: 10.0.99.1:8199 -> 10.0.99.110:9110 | Payload: '{"seq":12,"type":"BROADCAST","from_tag":"SENTRAL_KONTROLL","to_tag":"BRANNVESEN_110","payload":"STATUS_INERT_SEALED: Brann kvelt i serverrom, rommet er hermetisk forseglet"}'
+[2026-10-20 21:32:45.588] ←[32mINFO   ←[0m ←[1;37m[EXEC]←[0m Broadcast from [SENTRAL_KONTROLL] completed: 6 packet(s) sent
+[2026-10-20 21:32:45.994] ←[32mINFO   ←[0m ←[1;37m[EXEC]←[0m Program execution finished. Final routing state below:
+
+==================== ROUTING TABLE DUMP ====================
+
+[PUBLISHER TAGS] (count: 3)
+  TAG NAME         ENDPOINT                 STATE
+  --------------------------------------------------
+  VESDA_SERVER     10.0.0.10:8101           ACTIVE
+  VARME_TEKNISK    10.0.0.11:8102           ACTIVE
+  SENTRAL_KONTROLL 10.0.99.1:8199           ACTIVE
+
+[SUBSCRIBER TAGS] (count: 6)
+  TAG NAME         ENDPOINT                 STATE
+  --------------------------------------------------
+  SENTRAL_KONTROLL 10.0.99.1:9199           ACTIVE
+  SIRENE_SERVER    10.0.0.50:9100           ACTIVE
+  BLITZ_VARSLING   10.0.1.51:9111           ACTIVE
+  INERGEN_GASS_SERVER 10.0.0.70:9108           ACTIVE
+  HVAC_VENTILASJON_STOPP 10.0.3.60:9135           ACTIVE
+  BRANNVESEN_110   10.0.99.110:9110         ACTIVE
+
+[SUBSCRIPTION ROUTES] (count: 1)
+  SUBSCRIBER TAG   FROM ENDPOINT          -> TO ENDPOINT
+  ---------------------------------------------------------------
+  INERGEN_GASS_SERVER 10.0.0.10:8101         -> 10.0.0.70:9108
+============================================================
 
 ---
 
