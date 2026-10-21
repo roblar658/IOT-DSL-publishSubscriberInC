@@ -2,7 +2,8 @@
 
 Dette prosjektet implementerer et fullstendig, skreddersydd programmeringsspråk (Domain-Specific Language - DSL) i C for pub/sub- og IoT-nettverksruting. Løsningen inkluderer en **native C-backend webserver med Three.js 3D SCADA-visualisering**, et **interaktivt Win32 SCADA konsoll-UI med sanntidslogg og full UTF-8-støtte**, samt et **komplett Docker-testoppsett** for verifisering av distribuert nettverkskommunikasjon.
 
-<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/3bcf333d-54e0-4846-81ee-553c71392f1f" />
+<img width="958" height="529" alt="image" src="https://github.com/user-attachments/assets/56fffee7-73df-40aa-bd57-5312014c0afe" />
+
 
 <img width="959" height="479" alt="image" src="https://github.com/user-attachments/assets/3ca829f9-15f7-41ee-b7fc-f68af5840bec" />
 
