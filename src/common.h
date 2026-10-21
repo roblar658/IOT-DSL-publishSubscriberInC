@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <locale.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #define PLATFORM_WINDOWS 1
@@ -75,6 +76,24 @@ static inline void trim_whitespace(char *str) {
     str[len - 1] = '\0';
     len--;
   }
+}
+
+static inline void platform_init_utf8(void) {
+#if defined(PLATFORM_WINDOWS)
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+#endif
+#if defined(LC_ALL)
+    setlocale(LC_ALL, ".UTF-8");
+#endif
 }
 
 #endif // COMMON_H

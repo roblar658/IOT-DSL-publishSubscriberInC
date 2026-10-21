@@ -59,6 +59,7 @@ bool runtime_execute_program(Runtime *rt, const Program *prog);
 bool runtime_execute_statement(Runtime *rt, const AstStmt *stmt);
 
 bool runtime_send_direct(Runtime *rt, const char *from_tag, const char *to_tag, const char *payload);
+bool runtime_send_broadcast(Runtime *rt, const char *from_tag, const char *payload);
 void runtime_to_json(const Runtime *rt, char *out_json, size_t max_len);
 
 void runtime_dump_state(const Runtime *rt);

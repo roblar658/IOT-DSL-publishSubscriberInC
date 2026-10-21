@@ -407,6 +407,31 @@ bool runtime_send_direct(Runtime *rt, const char *from_tag, const char *to_tag, 
     return send_tag_message(rt, "SEND", pub, sub, payload);
 }
 
+bool runtime_send_broadcast(Runtime *rt, const char *from_tag, const char *payload) {
+    if (!rt || !from_tag) return false;
+    TagEntry *pub = runtime_find_tag(rt, REGISTRY_PUBLISHER, from_tag);
+    if (!pub) {
+        Endpoint ep;
+        net_parse_endpoint("10.0.99.1:8199", &ep);
+        runtime_set_tag(rt, REGISTRY_PUBLISHER, from_tag, &ep, false);
+        pub = runtime_find_tag(rt, REGISTRY_PUBLISHER, from_tag);
+    }
+    TagRegistry *sub_reg = &rt->subscriber_tags;
+    LOG_INFO("EXEC", "Initiating broadcast from [%s] to all subscribers", from_tag);
+
+    int sent_count = 0;
+    for (size_t i = 0; i < MAX_TAGS; i++) {
+        if (sub_reg->entries[i].in_use && !sub_reg->entries[i].is_empty) {
+            TagEntry *sub = &sub_reg->entries[i];
+            if (send_tag_message(rt, "BROADCAST", pub, sub, payload)) {
+                sent_count++;
+            }
+        }
+    }
+    LOG_INFO("EXEC", "Broadcast from [%s] completed: %d packet(s) sent", from_tag, sent_count);
+    return sent_count > 0;
+}
+
 void runtime_to_json(const Runtime *rt, char *out_json, size_t max_len) {
     if (!rt || !out_json || max_len == 0) return;
     size_t o = 0;

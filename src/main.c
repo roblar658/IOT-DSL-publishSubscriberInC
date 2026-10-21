@@ -5,17 +5,19 @@
 #include "runtime.h"
 #include "node_listener.h"
 #include "web_server.h"
+#include "win32_ui.h"
 
 static void print_usage(const char *prog_name) {
     printf("=================================================================\n");
-    printf("  PubSub DSL Engine & Node Daemon in C\n");
+    printf("  PubSub DSL Engine & Node Daemon in C (UTF-8)\n");
     printf("=================================================================\n");
     printf("Usage:\n");
-    printf("  %s web [port] [web_root]              Start C Web Server & Three.js SCADA Host\n", prog_name);
-    printf("  %s run <script.dsl> [options]         Execute a DSL script\n", prog_name);
-    printf("  %s listen <port | host:port> [options] Start a subscriber/publisher node\n", prog_name);
-    printf("  %s test                                Run built-in self tests\n", prog_name);
-    printf("  %s --help                              Show this help message\n\n", prog_name);
+    printf("  %s web [port] [web_root] [--ui|--no-ui] Start Web Server & SCADA Host\n", prog_name);
+    printf("  %s ui [port] [web_root]                 Start Win32 Console SCADA & Log Hub\n", prog_name);
+    printf("  %s run <script.dsl> [options]           Execute a DSL script\n", prog_name);
+    printf("  %s listen <port | host:port> [options]  Start a subscriber/publisher node\n", prog_name);
+    printf("  %s test                                 Run built-in self tests\n", prog_name);
+    printf("  %s --help                               Show this help message\n\n", prog_name);
     printf("Options for 'run':\n");
     printf("  --log <file>       Specify log file output (default: pubsub_dsl.log)\n");
     printf("  --quiet            Suppress console debug logs\n");
@@ -266,6 +268,41 @@ static int cmd_test(void) {
 static int cmd_web(int argc, char **argv) {
     int port = 3000;
     const char *web_root = "web";
+    bool use_ui = true;
+
+#if !defined(PLATFORM_WINDOWS)
+    use_ui = false;
+#endif
+
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
+            port = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--root") == 0 && i + 1 < argc) {
+            web_root = argv[++i];
+        } else if (strcmp(argv[i], "--no-ui") == 0 || strcmp(argv[i], "--headless") == 0 || strcmp(argv[i], "--daemon") == 0) {
+            use_ui = false;
+        } else if (strcmp(argv[i], "--ui") == 0) {
+            use_ui = true;
+        } else if (argv[i][0] != '-') {
+            int p = atoi(argv[i]);
+            if (p > 0) {
+                port = p;
+            } else {
+                web_root = argv[i];
+            }
+        }
+    }
+
+    if (use_ui) {
+        return win32_ui_run(port, web_root);
+    } else {
+        return web_server_start(port, web_root);
+    }
+}
+
+static int cmd_ui(int argc, char **argv) {
+    int port = 3000;
+    const char *web_root = "web";
 
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
@@ -282,10 +319,12 @@ static int cmd_web(int argc, char **argv) {
         }
     }
 
-    return web_server_start(port, web_root);
+    return win32_ui_run(port, web_root);
 }
 
 int main(int argc, char **argv) {
+    platform_init_utf8();
+
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
@@ -297,6 +336,8 @@ int main(int argc, char **argv) {
         return cmd_run(argc, argv);
     } else if (strcmp(cmd, "web") == 0 || strcmp(cmd, "serve") == 0) {
         return cmd_web(argc, argv);
+    } else if (strcmp(cmd, "ui") == 0 || strcmp(cmd, "console") == 0 || strcmp(cmd, "scada") == 0) {
+        return cmd_ui(argc, argv);
     } else if (strcmp(cmd, "listen") == 0) {
         return cmd_listen(argc, argv);
     } else if (strcmp(cmd, "test") == 0) {

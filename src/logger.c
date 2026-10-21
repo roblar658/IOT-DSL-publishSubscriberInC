@@ -4,16 +4,69 @@
 static FILE *s_log_file = NULL;
 static LogLevel s_console_level = LOG_LEVEL_DEBUG;
 static LogLevel s_file_level = LOG_LEVEL_DEBUG;
-static LoggerHookFn s_hook = NULL;
-static void *s_hook_userdata = NULL;
+#define MAX_LOGGER_HOOKS 8
+typedef struct {
+    LoggerHookFn fn;
+    void *userdata;
+} LoggerHookEntry;
+
+static LoggerHookEntry s_hooks[MAX_LOGGER_HOOKS];
+static int s_hook_count = 0;
+static bool s_console_output_enabled = true;
 
 static void lock_logger(void);
 static void unlock_logger(void);
 
 void logger_set_hook(LoggerHookFn hook, void *userdata) {
     lock_logger();
-    s_hook = hook;
-    s_hook_userdata = userdata;
+    s_hook_count = 0;
+    if (hook) {
+        s_hooks[0].fn = hook;
+        s_hooks[0].userdata = userdata;
+        s_hook_count = 1;
+    }
+    unlock_logger();
+}
+
+bool logger_add_hook(LoggerHookFn hook, void *userdata) {
+    if (!hook) return false;
+    lock_logger();
+    for (int i = 0; i < s_hook_count; i++) {
+        if (s_hooks[i].fn == hook) {
+            s_hooks[i].userdata = userdata;
+            unlock_logger();
+            return true;
+        }
+    }
+    if (s_hook_count < MAX_LOGGER_HOOKS) {
+        s_hooks[s_hook_count].fn = hook;
+        s_hooks[s_hook_count].userdata = userdata;
+        s_hook_count++;
+        unlock_logger();
+        return true;
+    }
+    unlock_logger();
+    return false;
+}
+
+void logger_remove_hook(LoggerHookFn hook) {
+    if (!hook) return;
+    lock_logger();
+    for (int i = 0; i < s_hook_count; i++) {
+        if (s_hooks[i].fn == hook) {
+            for (int j = i; j < s_hook_count - 1; j++) {
+                s_hooks[j] = s_hooks[j + 1];
+            }
+            s_hook_count--;
+            break;
+        }
+    }
+    unlock_logger();
+}
+
+void logger_enable_console_output(bool enable) {
+    lock_logger();
+    s_console_output_enabled = enable;
     unlock_logger();
 }
 
@@ -102,6 +155,7 @@ static void get_formatted_time(char *buf, size_t max_size) {
 }
 
 void logger_init(const char *logfile_path, LogLevel console_level, LogLevel file_level) {
+    platform_init_utf8();
     lock_logger();
 #if defined(PLATFORM_WINDOWS)
     enable_windows_vt();
@@ -167,8 +221,8 @@ void logger_log(LogLevel level, const char *component, const char *fmt, ...) {
     const char *lvl_str = level_to_string(level);
     const char *comp = (component && *component) ? component : "CORE";
 
-    // Console output with color
-    if (level >= s_console_level) {
+    // Console output with color (if console output is not suppressed by UI)
+    if (s_console_output_enabled && level >= s_console_level) {
         const char *color = level_to_color(level);
         const char *reset = "\033[0m";
         const char *comp_color = "\033[1;37m"; // Bold white
@@ -184,8 +238,10 @@ void logger_log(LogLevel level, const char *component, const char *fmt, ...) {
         fflush(s_log_file);
     }
 
-    if (s_hook) {
-        s_hook(level, comp, msgbuf, timebuf, s_hook_userdata);
+    for (int i = 0; i < s_hook_count; i++) {
+        if (s_hooks[i].fn) {
+            s_hooks[i].fn(level, comp, msgbuf, timebuf, s_hooks[i].userdata);
+        }
     }
 
     unlock_logger();

@@ -11,7 +11,7 @@ else
     RM = rm -f
 endif
 
-SRCS = src/logger.c src/net.c src/lexer.c src/ast.c src/parser.c src/runtime.c src/node_listener.c src/web_server.c src/main.c
+SRCS = src/logger.c src/net.c src/lexer.c src/ast.c src/parser.c src/runtime.c src/node_listener.c src/web_server.c src/win32_ui.c src/main.c
 OBJS = $(SRCS:.c=.o)
 
 .PHONY: all clean test

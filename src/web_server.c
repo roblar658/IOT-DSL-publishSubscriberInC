@@ -409,7 +409,7 @@ static void handle_http_connection(socket_t client_sock) {
             }
         }
         const char *resp = "{\"status\":\"OK\",\"message\":\"Execution started in C engine\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -421,7 +421,7 @@ static void handle_http_connection(socket_t client_sock) {
         unlock_rt();
         broadcast_sse_event("{\"type\":\"STATUS\",\"state\":\"PAUSED\"}");
         const char *resp = "{\"status\":\"OK\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -432,7 +432,7 @@ static void handle_http_connection(socket_t client_sock) {
         unlock_rt();
         broadcast_sse_event("{\"type\":\"STATUS\",\"state\":\"RUNNING\"}");
         const char *resp = "{\"status\":\"OK\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -444,7 +444,7 @@ static void handle_http_connection(socket_t client_sock) {
         unlock_rt();
         broadcast_sse_event("{\"type\":\"STATUS\",\"state\":\"STOPPED\"}");
         const char *resp = "{\"status\":\"OK\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -459,7 +459,7 @@ static void handle_http_connection(socket_t client_sock) {
         unlock_rt();
         broadcast_sse_event("{\"type\":\"RESET\"}");
         const char *resp = "{\"status\":\"OK\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -487,7 +487,7 @@ static void handle_http_connection(socket_t client_sock) {
         unlock_rt();
 
         const char *resp = "{\"status\":\"OK\"}";
-        send_http_response(client_sock, 200, "OK", "application/json", resp, strlen(resp));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", resp, strlen(resp));
         close_socket(client_sock);
         return;
     }
@@ -498,7 +498,7 @@ static void handle_http_connection(socket_t client_sock) {
         lock_rt();
         runtime_to_json(&g_runtime, json, sizeof(json));
         unlock_rt();
-        send_http_response(client_sock, 200, "OK", "application/json", json, strlen(json));
+        send_http_response(client_sock, 200, "OK", "application/json; charset=utf-8", json, strlen(json));
         close_socket(client_sock);
         return;
     }
@@ -547,26 +547,74 @@ static void *client_worker_thread(void *arg) {
 }
 #endif
 
+static int g_server_port = 3000;
+
+#if defined(PLATFORM_WINDOWS)
+static unsigned __stdcall accept_loop_thread(void *arg) {
+    (void)arg;
+    while (g_server_running) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        socket_t client = accept(g_listen_socket, (struct sockaddr *)&client_addr, &client_len);
+        if (client == INVALID_SOCKET_VAL) {
+            if (!g_server_running) break;
+            continue;
+        }
+
+        uintptr_t th = _beginthreadex(NULL, 0, client_worker_thread, (void *)(intptr_t)client, 0, NULL);
+        if (th) {
+            CloseHandle((HANDLE)th);
+        } else {
+            handle_http_connection(client);
+        }
+    }
+    return 0;
+}
+#else
+static void *accept_loop_thread(void *arg) {
+    (void)arg;
+    while (g_server_running) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        socket_t client = accept(g_listen_socket, (struct sockaddr *)&client_addr, &client_len);
+        if (client == INVALID_SOCKET_VAL) {
+            if (!g_server_running) break;
+            continue;
+        }
+
+        pthread_t th;
+        if (pthread_create(&th, NULL, client_worker_thread, (void *)(intptr_t)client) == 0) {
+            pthread_detach(th);
+        } else {
+            handle_http_connection(client);
+        }
+    }
+    return NULL;
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // SERVER ENTRY POINT
 // -----------------------------------------------------------------------------
 
-int web_server_start(int port, const char *web_root) {
+bool web_server_start_background(int port, const char *web_root) {
+    platform_init_utf8();
     if (web_root) {
         strncpy(g_web_root, web_root, sizeof(g_web_root) - 1);
     }
+    g_server_port = port;
 
     net_init();
     runtime_init(&g_runtime);
     g_runtime_inited = true;
 
     // Register logger hook to stream C logs via SSE
-    logger_set_hook(on_logger_hook, NULL);
+    logger_add_hook(on_logger_hook, NULL);
 
     g_listen_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (g_listen_socket == INVALID_SOCKET_VAL) {
         LOG_ERROR("WEB", "Failed to create TCP listen socket");
-        return 1;
+        return false;
     }
 
     int opt = 1;
@@ -581,48 +629,48 @@ int web_server_start(int port, const char *web_root) {
     if (bind(g_listen_socket, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR_VAL) {
         LOG_ERROR("WEB", "Failed to bind TCP port %d", port);
         close_socket(g_listen_socket);
-        return 1;
+        g_listen_socket = INVALID_SOCKET_VAL;
+        return false;
     }
 
     if (listen(g_listen_socket, 32) == SOCKET_ERROR_VAL) {
         LOG_ERROR("WEB", "Failed to listen on TCP port %d", port);
         close_socket(g_listen_socket);
-        return 1;
+        g_listen_socket = INVALID_SOCKET_VAL;
+        return false;
     }
 
     g_server_running = true;
+
+    LOG_INFO("WEB", "C Web Backend listening on port %d (root: '%s')", port, g_web_root);
+
+#if defined(PLATFORM_WINDOWS)
+    uintptr_t handle = _beginthreadex(NULL, 0, accept_loop_thread, NULL, 0, NULL);
+    if (handle) {
+        CloseHandle((HANDLE)handle);
+    }
+#else
+    pthread_t tid;
+    pthread_create(&tid, NULL, accept_loop_thread, NULL);
+    pthread_detach(tid);
+#endif
+
+    return true;
+}
+
+int web_server_start(int port, const char *web_root) {
+    if (!web_server_start_background(port, web_root)) {
+        return 1;
+    }
 
     printf("=================================================================\n");
     printf("  PubSub DSL C Web Backend & Three.js SCADA Host\n");
     printf("  Kjører i ren C på port %d\n", port);
     printf("  Åpne i nettleseren: http://localhost:%d\n", port);
     printf("=================================================================\n\n");
-    LOG_INFO("WEB", "C Web Backend listening on port %d (root: '%s')", port, g_web_root);
 
     while (g_server_running) {
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        socket_t client = accept(g_listen_socket, (struct sockaddr *)&client_addr, &client_len);
-        if (client == INVALID_SOCKET_VAL) {
-            if (!g_server_running) break;
-            continue;
-        }
-
-#if defined(PLATFORM_WINDOWS)
-        uintptr_t th = _beginthreadex(NULL, 0, client_worker_thread, (void *)(intptr_t)client, 0, NULL);
-        if (th) {
-            CloseHandle((HANDLE)th);
-        } else {
-            handle_http_connection(client);
-        }
-#else
-        pthread_t th;
-        if (pthread_create(&th, NULL, client_worker_thread, (void *)(intptr_t)client) == 0) {
-            pthread_detach(th);
-        } else {
-            handle_http_connection(client);
-        }
-#endif
+        sleep_ms(200);
     }
 
     web_server_stop();
@@ -650,4 +698,58 @@ void web_server_stop(void) {
         runtime_free(&g_runtime);
         g_runtime_inited = false;
     }
+}
+
+Runtime *web_server_get_runtime(void) {
+    return &g_runtime;
+}
+
+void web_server_lock_runtime(void) {
+    lock_rt();
+}
+
+void web_server_unlock_runtime(void) {
+    unlock_rt();
+}
+
+void web_server_run_dsl(const char *source) {
+    if (!source || strlen(source) == 0) {
+        FILE *f = fopen("scripts/fire_alarm_complex.dsl", "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            char *filebuf = (char *)malloc(sz + 1);
+            if (filebuf) {
+                fread(filebuf, 1, sz, f);
+                filebuf[sz] = '\0';
+                start_script_execution(filebuf);
+                free(filebuf);
+            }
+            fclose(f);
+        } else {
+            LOG_ERROR("EXEC", "Could not open default scripts/fire_alarm_complex.dsl");
+        }
+    } else {
+        start_script_execution(source);
+    }
+}
+
+void web_server_reset_runtime(void) {
+    lock_rt();
+    g_runtime.abort_execution = true;
+    g_runtime.is_paused = false;
+    runtime_free(&g_runtime);
+    runtime_init(&g_runtime);
+    unlock_rt();
+    broadcast_sse_event("{\"type\":\"RESET\"}");
+    LOG_INFO("CORE", "Runtime reset completed");
+}
+
+int web_server_get_port(void) {
+    return g_server_port;
+}
+
+bool web_server_is_running(void) {
+    return g_server_running;
 }

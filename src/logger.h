@@ -20,6 +20,9 @@ void logger_set_file_level(LogLevel level);
 
 typedef void (*LoggerHookFn)(LogLevel level, const char *component, const char *message, const char *timestamp, void *userdata);
 void logger_set_hook(LoggerHookFn hook, void *userdata);
+bool logger_add_hook(LoggerHookFn hook, void *userdata);
+void logger_remove_hook(LoggerHookFn hook);
+void logger_enable_console_output(bool enable);
 
 void logger_log(LogLevel level, const char *component, const char *fmt, ...);
 
